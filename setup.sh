@@ -22,6 +22,8 @@ echo "Symlinked .tmux.conf"
 
 # Install plugins
 echo "Installing plugins..."
+export TMUX_PLUGIN_MANAGER_PATH="$HOME/.tmux/plugins"
+tmux start-server \; set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins" 2>/dev/null
 "$HOME/.tmux/plugins/tpm/bin/install_plugins"
 
 echo "Done! Restart tmux or run: tmux source-file ~/.tmux.conf"
