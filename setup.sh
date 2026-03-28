@@ -20,6 +20,11 @@ fi
 ln -sf "$REPO_DIR/.tmux.conf" "$HOME/.tmux.conf"
 echo "Symlinked .tmux.conf"
 
+# Install tms (session picker) to PATH
+mkdir -p "$HOME/.local/bin"
+ln -sf "$REPO_DIR/tms" "$HOME/.local/bin/tms"
+echo "Installed tms session picker to ~/.local/bin/tms"
+
 # Install plugins
 echo "Installing plugins..."
 export TMUX_PLUGIN_MANAGER_PATH="$HOME/.tmux/plugins"

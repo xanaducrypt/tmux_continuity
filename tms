@@ -1,0 +1,102 @@
+#!/bin/bash
+# tms — tmux session picker
+# Lists all sessions with details, lets you pick one or create new.
+
+if ! command -v tmux &>/dev/null; then
+    echo "tmux is not installed."
+    exit 1
+fi
+
+# Start server if not running (needed to list sessions)
+tmux start-server 2>/dev/null
+
+fmt="#{session_activity}|#{session_name}|#{session_windows}|#{session_attached}|#{session_created}|#{session_last_attached}"
+sessions=$(tmux list-sessions -F "$fmt" 2>/dev/null)
+
+if [ -z "$sessions" ]; then
+    echo "No active tmux sessions."
+    read -rp "Create a new session? Name (enter for default): " name
+    if [ -n "$name" ]; then
+        exec tmux new-session -s "$name"
+    else
+        exec tmux new-session
+    fi
+fi
+
+now=$(date +%s)
+today_start=$(date -d "today 00:00:00" +%s 2>/dev/null || date -j -f "%Y-%m-%d %H:%M:%S" "$(date +%Y-%m-%d) 00:00:00" +%s 2>/dev/null)
+yesterday_start=$((today_start - 86400))
+
+fmt_ts() {
+    local ts=$1
+    if ! [ "$ts" -gt 0 ] 2>/dev/null; then
+        echo "—"
+        return
+    fi
+
+    local diff=$(( now - ts ))
+    local time_part
+    time_part=$(date -d "@$ts" "+%H:%M" 2>/dev/null || date -r "$ts" "+%H:%M" 2>/dev/null || echo "")
+
+    if [ "$ts" -ge "$today_start" ]; then
+        echo "today $time_part"
+    elif [ "$ts" -ge "$yesterday_start" ]; then
+        echo "yesterday $time_part"
+    else
+        local days=$(( diff / 86400 ))
+        echo "${days}d ago"
+    fi
+}
+
+# Sort by last activity (most recent first)
+echo ""
+echo "  Active tmux sessions (most recently active first):"
+echo "  ═══════════════════════════════════════════════════════════════════════════════"
+printf "  %3s  %-16s  %4s  %-16s  %-16s  %-16s  %s\n" "#" "SESSION" "WIN" "LAST ACTIVITY" "LAST ATTACHED" "CREATED" ""
+echo "  ───────────────────────────────────────────────────────────────────────────────"
+i=1
+declare -a session_names
+while IFS='|' read -r ts_activity name windows attached ts_created ts_attached; do
+    session_names+=("$name")
+
+    created=$(fmt_ts "$ts_created")
+    last_attached=$(fmt_ts "$ts_attached")
+    last_activity=$(fmt_ts "$ts_activity")
+
+    marker=""
+    if [ "$attached" -gt 0 ] 2>/dev/null; then
+        marker="* attached"
+    fi
+
+    printf "  %2d)  %-16s  %4s  %-16s  %-16s  %-16s  %s\n" "$i" "$name" "$windows" "$last_activity" "$last_attached" "$created" "$marker"
+    i=$((i + 1))
+done < <(echo "$sessions" | sort -t'|' -k1 -rn)
+
+echo ""
+echo "   n) New session"
+echo "   q) Quit"
+echo ""
+read -rp "  Select [1]: " choice
+
+case "$choice" in
+    q|Q) exit 0 ;;
+    n|N)
+        read -rp "  Session name (enter for default): " name
+        if [ -n "$name" ]; then
+            exec tmux new-session -s "$name"
+        else
+            exec tmux new-session
+        fi
+        ;;
+    ""|1)
+        exec tmux attach-session -t "${session_names[0]}"
+        ;;
+    *)
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#session_names[@]}" ]; then
+            exec tmux attach-session -t "${session_names[$((choice - 1))]}"
+        else
+            echo "  Invalid choice."
+            exit 1
+        fi
+        ;;
+esac
